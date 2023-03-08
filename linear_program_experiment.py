@@ -45,25 +45,33 @@ for method_name in cfg.methods:
     if method_name in ['invariant']:
         print(f'Training the model weights for {method_name}...')
         model = InvariantModel(feat_dim = 50, depth = 2).to(device)
-        for params in list(model.parameters()):
-            print(params.shape)
-
+        for name, params in list(model.named_parameters()):
+            print(name, params.shape)
         train_optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train_lr)
         for epoch in range(cfg.train_iter):
             obj_sum = 0
+
+            #print(model.linear[0].data)
+
             for name, constr_Q, coefs, basis_opt in train_dataset:
                 X = torch.FloatTensor(constr_Q).to(device)
                 coefs = torch.FloatTensor(coefs).to(device)
                 latent_vars = model(X, coefs)
-                print(latent_vars)
                 basis_opt = torch.tensor(basis_opt, dtype = torch.float, device = device)
                 obj = criterion(latent_vars, basis_opt)
                 obj.backward()
                 obj_sum += obj.mean()
+                #print(model.linear[0].data)
+                #print(model.linear[0].grad)
+                #print(latent_vars)
                 train_optimizer.step()
                 train_optimizer.zero_grad()
 
-                pred_indices = torch.topk(latent_vars, k=constr_Q.shape[1])[-1].cpu().detach().numpy()
+                pred_indices_k_1 = torch.topk(latent_vars, k=1+constr_Q.shape[1])[-1].cpu().detach().numpy()
+                pred_indices = pred_indices_k_1[:constr_Q.shape[1]]
+                print(latent_vars[pred_indices_k_1[-1]])
+                print(torch.min(latent_vars[pred_indices]))
+                print(latent_vars[pred_indices_k_1[-2]])
                 pred = np.zeros([coefs.shape[0]])
                 pred[pred_indices] = 1
                 f1 = f1_score(basis_opt.cpu().detach().numpy(), pred)
