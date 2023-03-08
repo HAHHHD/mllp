@@ -58,11 +58,25 @@ for method_name in cfg.methods:
                 coefs = torch.FloatTensor(coefs).to(device)
                 latent_vars = model(X, coefs)
                 basis_opt = torch.tensor(basis_opt, dtype = torch.float, device = device)
+                """
+                #validate the invariance under rotation
+                Q, _ = torch.FloatTensor(np.linalg.qr(np.random.rand(X.shape[-1], X.shape[-1]))).to(device)
+                X_rotate = X @ Q
+                latent_vars_rotate = model(X_rotate, coefs)
+                print(torch.norm(latent_vars))
+                print(torch.norm(latent_vars - latent_vars_rotate))
+                """
+
                 obj = criterion(latent_vars, basis_opt)
                 obj.backward()
                 obj_sum += obj.mean()
-                #print(model.linear[0].data)
-                #print(model.linear[0].grad)
+                
+                print(model.feat[0].data)
+                print(model.feat[0].grad)
+                print("========")
+                print(model.dir[0].data)
+                print(model.dir[0].grad)
+                
                 #print(latent_vars)
                 train_optimizer.step()
                 train_optimizer.zero_grad()
@@ -70,7 +84,7 @@ for method_name in cfg.methods:
                 pred_indices_k_1 = torch.topk(latent_vars, k=1+constr_Q.shape[1])[-1].cpu().detach().numpy()
                 pred_indices = pred_indices_k_1[:constr_Q.shape[1]]
                 print(latent_vars[pred_indices_k_1[-1]])
-                print(torch.min(latent_vars[pred_indices]))
+                #print(torch.min(latent_vars[pred_indices]))
                 print(latent_vars[pred_indices_k_1[-2]])
                 pred = np.zeros([coefs.shape[0]])
                 pred[pred_indices] = 1
