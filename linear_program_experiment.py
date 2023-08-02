@@ -28,6 +28,9 @@ if cfg.train_data_type == 'random':
 elif cfg.train_data_type == 'netlib':
     if cfg.methods[0] == 'invariant':
         train_dataset, train_dict = get_netlib_dataset_dense(normalize=True)
+    if cfg.methods[0] == 'angleNet':
+        train_dataset, train_dict = get_netlib_dataset_dense(normalize=True)
+        train_loader = get_netlib_dataloader(train_dataset, device)
     else:
         train_dataset, train_dict = get_netlib_dataset(normalize=True)
 elif cfg.train_data_type == 'twitch':
@@ -44,52 +47,26 @@ for method_name in cfg.methods:
     # not os.path.exists(model_path) and
     if method_name in ['invariant']:
         print(f'Training the model weights for {method_name}...')
-        model = InvariantModel(feat_dim = 50, depth = 1).to(device)
-        #for name, params in list(model.named_parameters()):
-        #    print(name, params.shape)
+        model = InvariantModel(feat_dim = 50, depth = 2).to(device)
+        for params in list(model.parameters()):
+            print(params.shape)
+
         train_optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train_lr)
         for epoch in range(cfg.train_iter):
             obj_sum = 0
-
-            #print(model.linear[0].data)
-
             for name, constr_Q, coefs, basis_opt in train_dataset:
                 X = torch.FloatTensor(constr_Q).to(device)
                 coefs = torch.FloatTensor(coefs).to(device)
                 latent_vars = model(X, coefs)
+                print(latent_vars)
                 basis_opt = torch.tensor(basis_opt, dtype = torch.float, device = device)
-                """
-                #validate the invariance under rotation
-                Q, _ = torch.FloatTensor(np.linalg.qr(np.random.rand(X.shape[-1], X.shape[-1]))).to(device)
-                X_rotate = X @ Q
-                latent_vars_rotate = model(X_rotate, coefs)
-                print(torch.norm(latent_vars))
-                print(torch.norm(latent_vars - latent_vars_rotate))
-                """
-
                 obj = criterion(latent_vars, basis_opt)
                 obj.backward()
                 obj_sum += obj.mean()
-                
-                print(model.linear[0].data)
-                print(model.linear[0].grad)
-                """
-                print(model.feat[0].data)
-                print(model.feat[0].grad)
-                print("========")
-                print(model.dir[0].data)
-                print(model.dir[0].grad)
-                """
-                
-                #print(latent_vars)
                 train_optimizer.step()
                 train_optimizer.zero_grad()
 
-                pred_indices_k_1 = torch.topk(latent_vars, k=1+constr_Q.shape[1])[-1].cpu().detach().numpy()
-                pred_indices = pred_indices_k_1[:constr_Q.shape[1]]
-                print(latent_vars[pred_indices_k_1[-1]])
-                #print(torch.min(latent_vars[pred_indices]))
-                print(latent_vars[pred_indices_k_1[-2]])
+                pred_indices = torch.topk(latent_vars, k=constr_Q.shape[1])[-1].cpu().detach().numpy()
                 pred = np.zeros([coefs.shape[0]])
                 pred[pred_indices] = 1
                 f1 = f1_score(basis_opt.cpu().detach().numpy(), pred)
@@ -101,7 +78,40 @@ for method_name in cfg.methods:
             with open("train_log.json", "w") as json_file:
                 json.dump(train_dict, json_file)
             print(f'epoch {epoch}, obj={obj_sum / len(train_dataset)}')
+    elif method_name == "angleNet":
+        print(f'Training the model weights for {method_name}...')
+        model = AngleModel(feat_dim = 256).to(device)
+        #for params in list(model.parameters()):
+        #    print(params.shape)
 
+        train_optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train_lr)
+        for epoch in range(cfg.train_iter):
+            obj_sum = 0
+            #for name, constr_Q, coefs, basis_opt in train_dataset:
+            for _, graph in enumerate(train_loader, 0):
+                name, basis_num, var_num, basis_opt = graph.name[0], graph.basis_num[0], graph.var_num[0], torch.tensor(graph.basis_opt[0], dtype = torch.float, device = device)
+                train_optimizer.zero_grad()
+                #print("var num", var_num)
+                latent_vars = model(graph)
+                #print(latent_vars.shape)
+                #print(basis_opt.shape)
+                obj = criterion(latent_vars, basis_opt)
+                obj.backward()
+                obj_sum += obj.mean()
+                train_optimizer.step()
+            
+                pred_indices = torch.topk(latent_vars, k=basis_num)[-1].cpu().detach().numpy()
+                pred = np.zeros(var_num)
+                pred[pred_indices] = 1
+                f1 = f1_score(basis_opt.cpu().detach().numpy(), pred)
+                correct_num = pred @ basis_opt.cpu().detach().numpy()
+                #print(correct_num, rhs.shape[0], rhs.shape[0] + coefs.shape[0])
+                print(f'%8d, %8d, %8d, %5f'%(correct_num, basis_num, var_num, f1))
+                train_dict[name].append(correct_num)
+            train_dict["obj"].append(obj_sum.cpu().detach().numpy() / len(train_dataset))
+            with open("train_log.json", "w") as json_file:
+                json.dump(train_dict, json_file)
+            print(f'epoch {epoch}, obj={obj_sum / len(train_dataset)}')
     elif method_name in ['gs-topk', 'soft-topk', 'egn']:
         print(f'Training the model weights for {method_name}...')
         model = GNNModel().to(device)

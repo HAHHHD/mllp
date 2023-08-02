@@ -39,14 +39,17 @@ def get_netlib_dataset_dense(normalize=True):
         #basis_opt = np.concatenate([v_basis_list, c_basis_list])
         basis_opt = np.load(file_path+file+"_basis.npy")
         coefs = np.load(file_path+file+"_coefs.npy")
+        coefs = np.concatenate([coefs, np.array([0])])
         rhs = np.load(file_path+file+"_rhs.npy")
         rhs = np.expand_dims(rhs, axis=-1)
         constrs_matrix = scipy.sparse.load_npz(file_path+file+"_constrs.npz").todense()
         assert(constrs_matrix.shape[0] == rhs.shape[0])
-        assert(constrs_matrix.shape[1] == coefs.shape[0])
+        assert(constrs_matrix.shape[1] == coefs.shape[0]-1)
         print("Instance {} size: {}".format(file_num, constrs_matrix.shape))
         constrs_matrix = np.concatenate([constrs_matrix, rhs], axis = -1)
         Q, _ = np.linalg.qr(constrs_matrix.T)
+        Q = np.array(Q)
+        print(Q.shape)
         dataset.append((file, Q, coefs, basis_opt))
         train_dict[file] = []
     return dataset, train_dict
