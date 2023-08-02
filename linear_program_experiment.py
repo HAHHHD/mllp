@@ -44,9 +44,9 @@ for method_name in cfg.methods:
     # not os.path.exists(model_path) and
     if method_name in ['invariant']:
         print(f'Training the model weights for {method_name}...')
-        model = InvariantModel(feat_dim = 50, depth = 2).to(device)
-        for name, params in list(model.named_parameters()):
-            print(name, params.shape)
+        model = InvariantModel(feat_dim = 50, depth = 1).to(device)
+        #for name, params in list(model.named_parameters()):
+        #    print(name, params.shape)
         train_optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train_lr)
         for epoch in range(cfg.train_iter):
             obj_sum = 0
@@ -71,11 +71,15 @@ for method_name in cfg.methods:
                 obj.backward()
                 obj_sum += obj.mean()
                 
+                print(model.linear[0].data)
+                print(model.linear[0].grad)
+                """
                 print(model.feat[0].data)
                 print(model.feat[0].grad)
                 print("========")
                 print(model.dir[0].data)
                 print(model.dir[0].grad)
+                """
                 
                 #print(latent_vars)
                 train_optimizer.step()

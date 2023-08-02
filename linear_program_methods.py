@@ -131,7 +131,8 @@ class InvariantModel(torch.nn.Module):
     def forward(self, X, coefs):
         emb = X
         for i in range(self.depth):
-            emb = torch.einsum('i,jk->jik', self.linear[i], emb)
+            #emb = torch.einsum('i,jk->jik', self.linear[i], emb)
+            """
             q = torch.einsum('i,jik->jk', self.feat[i], emb)
             k = torch.einsum('i,jik->jk', self.dir[i], emb)
             k_norm = k / torch.norm(k)
@@ -140,6 +141,9 @@ class InvariantModel(torch.nn.Module):
             k_scale = torch.einsum('i,i,ik->ik', inner_prod, sign, k_norm)
             emb = q - k_scale
             emb = self.graph_block(emb)
+            """
+        emb = torch.mean(emb, axis = 1)
+        print(emb.shape)
         emb = torch.mean(emb @ emb.T, axis = -1)[:-1]
         return emb
         emb = torch.stack([emb, coefs], axis = -1)
