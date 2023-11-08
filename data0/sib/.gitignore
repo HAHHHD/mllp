@@ -1,0 +1,6 @@
+.idea
+*-master
+*.whl
+.ipynb_checkpoints/ 
+*.ipynb 
+__pycache__ 
